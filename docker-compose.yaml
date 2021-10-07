@@ -1,0 +1,34 @@
+version: '3.7'
+
+services:
+
+# website
+  api:
+    build: .
+    container_name: api_service
+    command: uvicorn main:app --reload --port 8001
+    volumes:
+      - ./src:/usr/src
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+
+
+  db:
+    #platform: linux/x86_64
+    image: mariadb:10.5.8
+    volumes:
+        - db_data:/var/lib/mysql
+    restart: always
+    environment:
+        MYSQL_ROOT_PASSWORD: pass
+        MYSQL_DATABASE: wp
+        MYSQL_USER: wp
+        MYSQL_PASSWORD: wp
+#    networks:
+#        - wpsite
+
+volumes:
+  db_data:
+    name: db_data_volume
