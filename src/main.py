@@ -1,10 +1,9 @@
 from typing import List
-
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.encoders import jsonable_encoder
 
-from crud import CRUD
+from services import CRUD
 import model
 import schema
 
@@ -23,34 +22,35 @@ def get_db():
         db.close()
 
 
-@app.post('/user/', response_model=schema.UserAdd)
-def add_new_user(user: schema.UserAdd, db: Session = Depends(get_db)):
+@app.post('/user/', response_model=schema.UserBase)
+def add_new_user(user: schema.UserBase, db: Session = Depends(get_db)):
     username = jsonable_encoder(CRUD.get_user_by_username(db=db, username=user.username))
     if username:
         raise HTTPException(status_code=400, detail=f"User id {user.username} already exist: {username}")
     return jsonable_encoder(CRUD.add_user_details_to_db(db=db, user=user))
 
 
-@app.get('/user/{user_id}', response_model=schema.User)
-def get_user_by_id(id: int, db: Session = Depends(get_db)):
-    user = jsonable_encoder(CRUD.get_user_by_id(db=db, id=id))
+@app.get('/user/{user_id}', response_model=schema.UserAdd)
+async def get_user_by_id(id: int, db: Session = Depends(get_db)):
+    user = CRUD.get_user_by_id(db=db, id=id)
+    if not user:
+        raise HTTPException(status_code=400, detail=f'User with id: {id} not found')
     return jsonable_encoder(user)
 
 
-@app.put('/user/{user_id}', response_model=schema.User)
-def update_user_details(id: int, update_param: schema.UpdateUser, db: Session = Depends(get_db)):
+@app.put('/user/{user_id}', response_model=schema.UserAdd)
+def update_user_details(id: int, update_param: schema.UserAdd, db: Session = Depends(get_db)):
     details = jsonable_encoder(CRUD.get_user_by_id(db=db, id=id))
     if not details:
         raise HTTPException(status_code=404, detail=f"No record found to update")
     return jsonable_encoder(CRUD.update_user_details(db=db, details=update_param, id=id))
 
 
-@app.patch('user/{user_id}', response_model=schema.User)
-def patch_user_details(id: int, update_param: schema.PatchUser, db: Session = Depends(get_db)):
+@app.patch('/user/{user_id}', response_model=schema.PatchUser)
+def change_password(id: int, update_param: schema.PatchUser, db: Session = Depends(get_db)):
     details = jsonable_encoder(CRUD.get_user_by_id(db=db, id=id))
     if not details:
         raise HTTPException(status_code=404, detail=f"No record found to update")
-
     return jsonable_encoder(CRUD.patch_user_details(db=db, details=update_param, id=id))
 
 
@@ -59,7 +59,6 @@ def delete_user_by_id(id: int, db: Session = Depends(get_db)):
     details = jsonable_encoder(CRUD.get_user_by_id(db=db, id=id))
     if not details:
         raise HTTPException(status_code=404, detail=f"Not found ")
-
     try:
         jsonable_encoder(CRUD.delete_user_details_by_id(db=db, id=id))
     except Exception as e:
@@ -67,7 +66,9 @@ def delete_user_by_id(id: int, db: Session = Depends(get_db)):
     return jsonable_encoder({"delete status": "success"})
 
 
-@app.get('/user-list', response_model=List[schema.User])
+@app.get('/user-list', response_model=List[schema.UserAdd])
 def get_all_user_details(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     users = jsonable_encoder(CRUD.get_user(db=db, skip=skip, limit=limit))
+    if not users:
+        raise HTTPException(status_code=400, detail='Base is empty')
     return users
