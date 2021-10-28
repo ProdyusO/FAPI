@@ -1,11 +1,12 @@
-from sqlalchemy import Column, Integer, String
-from db import Base
+from sqlalchemy import Column, Integer, Table, String
+from db import metadata
 
-
-class User(Base):
-    __tablename__ = 'user'
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True)
-    email = Column(String(255), unique=True)
-    password = Column(String(100))
-    register_date = Column(String(100))
+users = Table(
+    'users',
+    metadata,
+    Column('id', Integer, primary_key=True),
+    Column('username', String(100), unique=True),
+    Column('email', String(100), unique=True),
+    Column('password', String(100)),
+    Column('register_date', String(100))
+)

@@ -1,74 +1,74 @@
+from fastapi import FastAPI, HTTPException, APIRouter
+from db import database, metadata, engine
 from typing import List
-from fastapi import Depends, FastAPI, HTTPException
-from sqlalchemy.orm import Session
-from fastapi.encoders import jsonable_encoder
 
 from services import CRUD
-import model
 import schema
 
-from db import SessionLocal, engine
 
-model.Base.metadata.create_all(bind=engine)
+metadata.create_all(bind=engine)
 
 app = FastAPI()
+#router = APIRouter()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
 
 
 @app.post('/user/', response_model=schema.UserBase)
-def add_new_user(user: schema.UserBase, db: Session = Depends(get_db)):
-    username = jsonable_encoder(CRUD.get_user_by_username(db=db, username=user.username))
-    if username:
-        raise HTTPException(status_code=400, detail=f"User id {user.username} already exist: {username}")
-    return jsonable_encoder(CRUD.add_user_details_to_db(db=db, user=user))
+async def add_new_user(user: schema.UserBase):
+    detail = await CRUD.get_user_by_username(username=user.username)
+    if detail is not None:
+        raise HTTPException(status_code=400, detail=f"User with name {user.username} already exist")
+    return await CRUD.add_user_details_to_db(details=user)
 
 
-@app.get('/user/{user_id}', response_model=schema.UserAdd)
-async def get_user_by_id(id: int, db: Session = Depends(get_db)):
-    user = CRUD.get_user_by_id(db=db, id=id)
+@app.get('/user/{user_id}/', response_model=schema.UserAdd)
+async def get_user_by_id(id: int):
+    user = await CRUD.get_user_by_id(id=id)
     if not user:
         raise HTTPException(status_code=400, detail=f'User with id: {id} not found')
-    return jsonable_encoder(user)
+    return user
 
 
-@app.put('/user/{user_id}', response_model=schema.UserAdd)
-def update_user_details(id: int, update_param: schema.UserAdd, db: Session = Depends(get_db)):
-    details = jsonable_encoder(CRUD.get_user_by_id(db=db, id=id))
+@app.put('/user/{user_id}', response_model=schema.UserBase)
+async def update_user_details(id: int, update_param: schema.UserBase):
+    details = await CRUD.get_user_by_id(id=id)
     if not details:
         raise HTTPException(status_code=404, detail=f"No record found to update")
-    return jsonable_encoder(CRUD.update_user_details(db=db, details=update_param, id=id))
+    return await CRUD.update_user_details(details=update_param, id=id)
 
 
 @app.patch('/user/{user_id}', response_model=schema.PatchUser)
-def change_password(id: int, update_param: schema.PatchUser, db: Session = Depends(get_db)):
-    details = jsonable_encoder(CRUD.get_user_by_id(db=db, id=id))
+async def change_password(id: int, update_param: schema.PatchUser):
+    details = await CRUD.get_user_by_id(id=id)
     if not details:
         raise HTTPException(status_code=404, detail=f"No record found to update")
-    return jsonable_encoder(CRUD.patch_user_details(db=db, details=update_param, id=id))
+    return await CRUD.patch_user_details(details=update_param, id=id)
 
 
-@app.delete('/user/{user_id}')
-def delete_user_by_id(id: int, db: Session = Depends(get_db)):
-    details = jsonable_encoder(CRUD.get_user_by_id(db=db, id=id))
+@app.delete('/user/{user_id}/')
+async def delete_user_by_id(id: int):
+    details = await CRUD.get_user_by_id(id=id)
     if not details:
         raise HTTPException(status_code=404, detail=f"Not found ")
     try:
-        jsonable_encoder(CRUD.delete_user_details_by_id(db=db, id=id))
+        await CRUD.delete_user_details_by_id(id=id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Unable to delete: {e}")
-    return jsonable_encoder({"delete status": "success"})
+    return {"delete status": "success"}
 
 
 @app.get('/user-list', response_model=List[schema.UserAdd])
-def get_all_user_details(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    users = jsonable_encoder(CRUD.get_user(db=db, skip=skip, limit=limit))
+async def get_all_users_details(skip: int = 0, limit: int = 100):
+    users = await CRUD.get_users(skip=skip, limit=limit)
     if not users:
         raise HTTPException(status_code=400, detail='Base is empty')
     return users
